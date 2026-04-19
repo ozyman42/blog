@@ -1,0 +1,24 @@
+---
+import SocialLinks from './SocialLinks.astro';
+const today = new Date();
+---
+
+<footer>
+	&copy; {today.getFullYear()} Alexander Leung. All rights reserved.
+	<div class="social-links-footer">
+		<SocialLinks />
+	</div>
+</footer>
+<style>
+	footer {
+		padding: 2em 1em 6em 1em;
+		background: linear-gradient(var(--gray-gradient)) no-repeat;
+		color: rgb(var(--gray));
+		text-align: center;
+	}
+	.social-links-footer {
+		display: flex;
+		justify-content: center;
+		margin-top: 1em;
+	}
+</style>
