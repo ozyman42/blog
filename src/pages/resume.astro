@@ -2,19 +2,132 @@
 import BaseHead from '../components/BaseHead.astro';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
+import 'pdfjs-dist/web/pdf_viewer.css';
 ---
 
 <!doctype html>
 <html lang="en">
 	<head>
 		<BaseHead title="Resume" description="My resume" />
+		<style is:global>
+			main {
+				width: min(960px, calc(100% - 2em));
+			}
+			.pdf-page {
+				position: relative;
+				margin-bottom: 8px;
+			}
+			.pdf-page canvas {
+				display: block;
+			}
+		</style>
 	</head>
 	<body>
 		<Header />
 		<main>
-			<h1>Resume</h1>
-			<p>Coming soon.</p>
+			<div id="resume-files">
+				<p>Loading...</p>
+			</div>
 		</main>
 		<Footer />
 	</body>
 </html>
+
+<script>
+	import * as pdfjsLib from 'pdfjs-dist';
+	import { TextLayer } from 'pdfjs-dist';
+	import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
+	pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+
+	function formatDate(iso: string): string {
+		const [year, month, day] = iso.split('-').map(Number);
+		const date = new Date(year, month - 1, day);
+		const d = date.getDate();
+		const suffix = Math.floor(d / 10) === 1 ? 'th'
+			: d % 10 === 1 ? 'st'
+			: d % 10 === 2 ? 'nd'
+			: d % 10 === 3 ? 'rd' : 'th';
+		const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+		return `${monthName} ${d}${suffix}, ${year}`;
+	}
+
+	const container = document.getElementById('resume-files')!;
+
+	async function loadResume() {
+		const listRes = await fetch('https://api.github.com/repos/ozyman42/resume/contents/?ref=outputs');
+		if (!listRes.ok) throw new Error(`GitHub API error: ${listRes.status}`);
+
+		const files: Array<{ name: string; download_url: string | null; type: string }> = await listRes.json();
+		const pdfFiles = files
+			.filter(f => f.type === 'file' && /^\d{4}-\d{2}-\d{2}/.test(f.name))
+			.sort((a, b) => b.name.localeCompare(a.name));
+
+		if (pdfFiles.length === 0) {
+			container.innerHTML = '<p>No resume files found.</p>';
+			return;
+		}
+
+		const latest = pdfFiles[0];
+		const dateMatch = latest.name.match(/^(\d{4}-\d{2}-\d{2})/);
+		const dateLabel = dateMatch ? formatDate(dateMatch[1]) : latest.name;
+
+		const pdfRes = await fetch(latest.download_url!);
+		if (!pdfRes.ok) throw new Error(`PDF fetch error: ${pdfRes.status}`);
+		const arrayBuffer = await pdfRes.arrayBuffer();
+
+		const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+		const blobUrl = URL.createObjectURL(blob);
+
+		container.innerHTML = `
+			<div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+				<p style="margin:0;">Updated on ${dateLabel}</p>
+				<a href="${blobUrl}" download="${latest.name}" style="padding:0.3rem 0.8rem; border:1px solid currentColor; border-radius:4px; text-decoration:none; font-size:0.85rem;">Download PDF</a>
+			</div>
+			<div id="pdf-canvas-container"></div>
+		`;
+
+		const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+		const canvasContainer = document.getElementById('pdf-canvas-container')!;
+		const dpr = window.devicePixelRatio || 1;
+
+		for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+			const page = await pdf.getPage(pageNum);
+			const naturalViewport = page.getViewport({ scale: 1 });
+			const scale = canvasContainer.clientWidth / naturalViewport.width;
+			const viewport = page.getViewport({ scale });
+
+			const pageDiv = document.createElement('div');
+			pageDiv.className = 'pdf-page';
+			pageDiv.style.width = `${viewport.width}px`;
+			pageDiv.style.height = `${viewport.height}px`;
+			canvasContainer.appendChild(pageDiv);
+
+			const canvas = document.createElement('canvas');
+			canvas.width = viewport.width * dpr;
+			canvas.height = viewport.height * dpr;
+			canvas.style.width = `${viewport.width}px`;
+			canvas.style.height = `${viewport.height}px`;
+			pageDiv.appendChild(canvas);
+
+			const ctx = canvas.getContext('2d')!;
+			ctx.scale(dpr, dpr);
+			await page.render({ canvasContext: ctx, viewport }).promise;
+
+			const textLayerDiv = document.createElement('div');
+			textLayerDiv.className = 'textLayer';
+			pageDiv.appendChild(textLayerDiv);
+
+			const textLayer = new TextLayer({
+				textContentSource: page.streamTextContent(),
+				container: textLayerDiv,
+				viewport,
+			});
+			await textLayer.render();
+		}
+	}
+
+	loadResume().catch(err => {
+		container.innerHTML = '<p>Failed to load resume.</p>';
+		console.error(err);
+	});
+</script>

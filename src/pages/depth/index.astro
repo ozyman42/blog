@@ -89,9 +89,11 @@ const posts = (await getCollection('depth')).sort(
 		<Header />
 		<main>
 			<section>
-				<ul>
-					{
-						posts.map((post) => (
+				{posts.length === 0 ? (
+					<p>Coming soon.</p>
+				) : (
+					<ul>
+						{posts.map((post) => (
 							<li>
 								<a href={`/depth/${post.id}/`}>
 									{post.data.heroImage && (
@@ -103,9 +105,9 @@ const posts = (await getCollection('depth')).sort(
 									</p>
 								</a>
 							</li>
-						))
-					}
-				</ul>
+						))}
+					</ul>
+				)}
 			</section>
 		</main>
 		<Footer />
