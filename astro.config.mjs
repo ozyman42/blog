@@ -2,8 +2,10 @@
 
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import { rendererRich, transformerTwoslash } from '@shikijs/twoslash';
 import { defineConfig, fontProviders } from 'astro/config';
-import { transformerTwoslash } from '@shikijs/twoslash';
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import { toHast } from 'mdast-util-to-hast';
 
 // https://astro.build/config
 export default defineConfig({
@@ -14,7 +16,14 @@ export default defineConfig({
 			theme: 'github-dark',
 			wrap: true,
 			transformers: [
-				transformerTwoslash(),
+				transformerTwoslash({
+					renderer: rendererRich({
+						renderMarkdown(md) {
+							const hast = toHast(fromMarkdown(md));
+							return hast?.children ?? [];
+						},
+					}),
+				}),
 			],
 		},
 	},

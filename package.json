@@ -15,8 +15,11 @@
     "@astrojs/mdx": "^5.0.3",
     "@astrojs/rss": "^4.0.18",
     "@astrojs/sitemap": "^3.7.2",
+    "@effect/platform": "^0.96.1",
+    "@effect/platform-node": "^0.106.0",
     "@shikijs/twoslash": "^4.0.2",
     "astro": "^6.1.8",
+    "effect": "^3.21.2",
     "pdfjs-dist": "^5.6.205",
     "sharp": "^0.34.3",
     "twoslash": "^0.3.8"

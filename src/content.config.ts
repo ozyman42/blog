@@ -9,6 +9,7 @@ const postSchema = ({ image }: { image: () => z.ZodType }) =>
 		pubDate: z.coerce.date(),
 		updatedDate: z.coerce.date().optional(),
 		heroImage: z.optional(image()),
+		subtitle: z.string().optional(),
 	});
 
 const tech = defineCollection({

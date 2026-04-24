@@ -30,6 +30,12 @@
 	--header-bg: #161b22;
 	--text: rgb(var(--gray-dark));
 	--code-bg: rgb(var(--gray-light));
+	--accent: #7aa2f7;
+	--twoslash-popup-bg: #1c2128;
+	--twoslash-popup-color: #cdd9e5;
+	--twoslash-border-color: #444c56;
+	--twoslash-docs-color: #adbac7;
+	--twoslash-popup-shadow: rgba(0, 0, 0, 0.4) 0px 1px 8px;
 }
 body {
 	font-family: var(--font-atkinson);
@@ -87,10 +93,7 @@ a:hover {
 	color: var(--accent);
 }
 p {
-	margin-bottom: 1em;
-}
-.prose p {
-	margin-bottom: 2em;
+	margin: 1em 0;
 }
 textarea {
 	width: 100%;
@@ -111,6 +114,7 @@ code {
 	padding: 2px 5px;
 	background-color: var(--code-bg);
 	border-radius: 2px;
+	font-size: 0.85em;
 }
 pre {
 	padding: 1.5em;
@@ -141,11 +145,38 @@ pre .line:has(.twoslash-query-persisted) {
 .twoslash-popup-code {
 	white-space: nowrap;
 }
+.twoslash-popup-container {
+	min-width: 450px;
+	max-width: min(600px, 90vw);
+}
+.twoslash .twoslash-popup-code {
+	background: #161b22;
+	border-radius: 4px 4px 0 0;
+	overflow-x: auto;
+}
+.twoslash .twoslash-popup-docs {
+	font-size: 0.95rem !important;
+	max-height: 300px;
+	overflow-y: auto;
+}
+.twoslash .twoslash-popup-docs p {
+	margin: 0.4em 0;
+}
 blockquote {
 	border-left: 4px solid var(--accent);
 	padding: 0 0 0 20px;
-	margin: 0;
+	margin: 0.5em 0;
 	font-size: 1.333em;
+}
+.prose p:has(+ blockquote),
+.prose blockquote + p {
+	margin-bottom: 0.5em;
+}
+.prose blockquote p:first-child {
+	margin-top: 0;
+}
+.prose blockquote p:last-child {
+	margin-bottom: 0;
 }
 hr {
 	border: none;
