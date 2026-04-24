@@ -2,19 +2,32 @@
 
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import { rendererRich, transformerTwoslash } from '@shikijs/twoslash';
 import { defineConfig, fontProviders } from 'astro/config';
-import { transformerTwoslash } from '@shikijs/twoslash';
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import { toHast } from 'mdast-util-to-hast';
+import remarkDirective from 'remark-directive';
+import remarkCompare from './src/remark-compare.ts';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://ozyman42.github.io',
 	integrations: [mdx(), sitemap()],
 	markdown: {
+		remarkPlugins: [remarkDirective, remarkCompare],
 		shikiConfig: {
 			theme: 'github-dark',
 			wrap: true,
 			transformers: [
-				transformerTwoslash(),
+				transformerTwoslash({
+					explicitTrigger: true,
+					renderer: rendererRich({
+						renderMarkdown(md) {
+							const hast = toHast(fromMarkdown(md));
+							return hast?.children ?? [];
+						},
+					}),
+				}),
 			],
 		},
 	},

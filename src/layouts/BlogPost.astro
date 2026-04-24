@@ -12,7 +12,7 @@ type Props = Omit<CollectionEntry<'tech'>['data'], 'pubDate' | 'updatedDate'> & 
 	updatedDate?: Date;
 };
 
-const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
+const { title, subtitle, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
 <html lang="en">
@@ -34,7 +34,7 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 				box-shadow: var(--box-shadow);
 			}
 			.prose {
-				width: 720px;
+				width: var(--content-width);
 				max-width: calc(100% - 2em);
 				margin: auto;
 				padding: 1em;
@@ -47,7 +47,12 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 				line-height: 1;
 			}
 			.title h1 {
-				margin: 0 0 0.5em 0;
+				margin: 0 0 0.2em 0;
+			}
+			.subtitle {
+				margin: 0 0 1em 0;
+				font-size: 1.2em;
+				color: rgb(var(--gray));
 			}
 			.date {
 				margin-bottom: 0.5em;
@@ -122,6 +127,7 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 							</div>
 						)}
 						<h1>{title}</h1>
+						{subtitle && <p class="subtitle">{subtitle}</p>}
 						<hr />
 					</div>
 					<slot />
