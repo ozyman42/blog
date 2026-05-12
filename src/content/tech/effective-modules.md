@@ -9,7 +9,7 @@ heroImage: './effective-modules-splash.png'
 (Note: this article assumes familiarity with TypeScript, Effect, and SOLID).  
 To jump straight to the tool I built, [click here](#module-declaration)
 
-Since late 2025, I've been moving all my personal projects over to Effect, along with several work projects at Flexport (before getting laid off last month). I've come to largely agree with the premise that Effect is
+Since late 2025, I've been moving all my personal projects over to Effect, along with several work projects at Flexport (before getting laid off a couple months ago). I've come to largely agree with the premise that Effect is
 
 > the missing TypeScript standard library
 
@@ -21,104 +21,104 @@ Since late 2025, I've been moving all my personal projects over to Effect, along
 
 In 2026, serious developers who understand the value of a strongly-typed language consider all these table stakes for a robust, type-safe programming platform. All these are missing from vanilla TypeScript. A comprehensive standard library *should* include all these features, and Effect has done it for the TypeScript ecosystem, arguably *outdoing* the ecosystem alternatives on every front. Effect has brought DI into the type system. That is, there is a **compile-time failure** when required dependencies aren't provided. In general, few DI systems across all major programming languages offer this highest level of correctness.
 
-So Effect seems like the right choice for writing TypeScript at scale. However, as I adopt Effect conventions like services, context, and layers across my projects, I keep having awkward developer experiences.
+So Effect seems like the right choice for writing TypeScript at scale. However, as I adopt Effect conventions like services, context, and layers across my projects, I keep running into some awkward developer experiences.
 
 ## Headaches
 
 #### 1. Decoupling Impl from Interface
 
-In the Effect v3 docs, we are [encouraged](https://effect.website/docs/requirements-management/layers/#simplifying-service-definitions-with-effectservice) to use the `Effect.Service` utility to improve code succinctness, providing a default implementation of a service from which its interface is inferred:
+In Effect v3, were [encouraged](https://effect.website/docs/requirements-management/layers/#simplifying-service-definitions-with-effectservice) to use the `Effect.Service` utility to improve code succinctness. Provide a default implementation of a service and its interface gets inferred.
 
 ```ts twoslash
-import * as e from "effect";
-import * as ep from "@effect/platform";
-import * as epn from "@effect/platform-node"
+import { Effect } from "effect";
+import { FileSystem } from "@effect/platform";
+import { NodeFileSystem } from "@effect/platform-node"
 
-class Cache extends e.Effect.Service<Cache>()("app/Cache", {
+class Cache extends Effect.Service<Cache>()("app/Cache", {
   // Define how to create the service
-  effect: e.Effect.gen(function* () {
-    const fs = yield* ep.FileSystem.FileSystem
-    const lookup = (key: string) => fs.readFileString(`cache/${key}`)
-    return { lookup } as const
+  effect: Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const lookup = (key: string) => fs.readFileString(`cache/${key}`);
+    return { lookup } as const;
   }),
   // Specify dependencies
-  dependencies: [epn.NodeFileSystem.layer]
+  dependencies: [NodeFileSystem.layer]
 }) {}
 
 
-e.Effect.gen(function*() {
+Effect.gen(function*() {
     const cache = yield* Cache;
     yield* cache.lookup("some key");
     //           ^?
-})
+});
 ```
 
-While this does improve readability (compared to declaring the tag and layer separately), the trade-off is violating a sacred SOLID pillar, the [Dependency Inversion principle](https://en.wikipedia.org/wiki/Dependency_inversion_principle), which mandates that maintainable code ought to depend on abstractions not concretions. If a bug is introduced into the implementation, a compiler error will ideally appear *in* the implementation block and the interface will not change. But with `Effect.Service` an error may instead appear in clients of the service because changing the implementation can change the interface.
+While this does improve readability (compared to declaring the tag and layer separately), the trade-off is violating a sacred SOLID pillar, the [Dependency Inversion principle](https://en.wikipedia.org/wiki/Dependency_inversion_principle), which mandates that maintainable code ought to depend on abstractions, not concretions. If a bug is introduced into the implementation, a compiler error should ideally appear *in* the implementation block and the interface should not change. But with `Effect.Service` an error may instead appear in clients of the service because changing the implementation might also change the interface.
 
 ```ts twoslash
 // @errors: 2551
-import * as e from "effect";
-import * as ep from "@effect/platform";
-import * as epn from "@effect/platform-node"
+import { Effect } from "effect";
+import { FileSystem } from "@effect/platform";
+import { NodeFileSystem } from "@effect/platform-node"
 // ---cut---
-class Cache extends e.Effect.Service<Cache>()("app/Cache", {
-  effect: e.Effect.gen(function* () {
-    const fs = yield* ep.FileSystem.FileSystem
+class Cache extends Effect.Service<Cache>()("app/Cache", {
+  effect: Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     // Accidentally changed the spelling of "lookup" to "lockup"
-    const lockup = (key: string) => fs.readFileString(`cache/${key}`)
+    const lockup = (key: string) => fs.readFileString(`cache/${key}`);
     //    ^^^^^^
-    return { lockup } as const
+    return { lockup } as const;
   }),
-  dependencies: [epn.NodeFileSystem.layer]
+  dependencies: [NodeFileSystem.layer]
 }) {}
 
-e.Effect.gen(function*() {
+Effect.gen(function*() {
     const cache = yield* Cache;
     yield* cache.lookup("some key");
-})
+});
 ```
 
 I deem Effect v3's `Effect.Service` an anti-pattern, but if it's so problematic why was it introduced at all?
 
 #### 2. Awkward Interface Syntax
 
-It was introduced because the right way to do things sucks. In Effect, declaring an interface (tag) looks like this
+`Effect.Service` was introduced because the right way to do things *sucks*. In Effect, declaring an interface (tag) looks like this
 
 ```ts twoslash
 // @errors: 2507 2558
-import * as e from "effect";
-import * as ep from "@effect/platform";
+import { Effect, Context } from "effect";
+import { PlatformError } from "@effect/platform/Error";
 // ---cut---
 type ICache = {
-  lookup(key: string): e.Effect.Effect<string, ep.Error.PlatformError, never>
+  lookup(key: string): Effect.Effect<string, PlatformError, never>
 }
 
-class Cache extends e.Context.Tag<Cache, ICache>("app/Cache") {}
+class Cache extends Context.Tag<Cache, ICache>("app/Cache") {}
 ```
 
 Oh wait no it's
 
 ```ts twoslash
 // @errors: 2558 2554
-import * as e from "effect";
-import * as ep from "@effect/platform";
+import { Effect, Context } from "effect";
+import { PlatformError } from "@effect/platform/Error";
 type ICache = {
-  lookup(key: string): e.Effect.Effect<string, ep.Error.PlatformError, never>
+  lookup(key: string): Effect.Effect<string, PlatformError, never>
 }
 // ---cut---
-class Cache extends e.Context.Tag<Cache, ICache>()("app/Cache") {}
+class Cache extends Context.Tag<Cache, ICache>()("app/Cache") {}
 ```
 
 Still not it. Maybe
 
 ```ts twoslash
-import * as e from "effect";
-import * as ep from "@effect/platform";
+import { Effect, Context } from "effect";
+import { PlatformError } from "@effect/platform/Error";
 type ICache = {
-  lookup(key: string): e.Effect.Effect<string, ep.Error.PlatformError, never>
+  lookup(key: string): Effect.Effect<string, PlatformError, never>
 }
 // ---cut---
-class Cache extends e.Context.Tag("app/Cache")<Cache, ICache>() {}
+class Cache extends Context.Tag("app/Cache")<Cache, ICache>() {}
 ```
 
 there we go.
@@ -141,30 +141,31 @@ In this example from one of my own projects, this is what happens when I change 
 
 ![](./effective-modules-entire-impl-wrong.png)
 
-This is not conducive to productively finding and fixing the bug. The entire service's body is highlighted as incorrect now just because of a bug in one method. Ideally only the `resolveAccessToken` line would be highlighted as wrong, prompting me to pipe a provided context containing the required service.
+Seeing the whole function light up as incorrect is not conducive to productively finding and fixing the bug. Ideally only the `resolveAccessToken` line would be highlighted as wrong, prompting me to pipe a provided context containing the required service.
 
-When one runs into this kind of issue frequently, it becomes tempting to take the path of least resistance. Often times this looks like handling all possible errors after the entire effect's body rather than handling each error at the line which produces it; over time this leads to brittle and confusing code.
+When one runs into this kind of issue frequently, it becomes tempting to take the path of least resistance. Often times that looks like handling all possible errors after the entire effect's body rather than handling each error at the line which produces it; over time this leads to brittle and confusing code.
 
 #### 4. Verbose Dependency Passing
 
-Building on that `resolveAccessToken`, when you want to call an effect which depends on 1+ services you need to either define that effect within the layer implementation's closure so it has access to services yielded at layer construction time, or you need to create a custom context and provide it to the effect before yielding.
+Building on that `resolveAccessToken` example, when you want to call an effect which depends on 1+ services you need to either define that effect within the layer implementation's closure so there's access to services yielded at layer construction time, or you need to create a custom context and provide it to the effect before yielding.
 
 Here's an example of the first option
 
 ```ts twoslash
-import * as e from "effect";
+import { Effect, Context, Layer } from "effect";
 // ---cut---
-class ServiceOne extends e.Context.Tag("ServiceOne")<ServiceOne, {
-  serviceOneMethod(someInput: number): e.Effect.Effect<string, never, never>;
+class ServiceOne extends Context.Tag("ServiceOne")<ServiceOne, {
+  serviceOneMethod(someInput: number): Effect.Effect<string, never, never>;
 }>() {};
 
-class ServiceTwo extends e.Context.Tag("ServiceTwo")<ServiceTwo, {
-  serviceTwoMethod(someInput: number): e.Effect.Effect<string, never, never>; 
+class ServiceTwo extends Context.Tag("ServiceTwo")<ServiceTwo, {
+  serviceTwoMethod(someInput: number): Effect.Effect<string, never, never>; 
 }>() {};
 
-const ServiceTwoImpl = e.Layer.effect(ServiceTwo, e.Effect.gen(function*() {
+const ServiceTwoImpl = Layer.effect(ServiceTwo, Effect.gen(function*() {
   const serviceOne = yield* ServiceOne;
-  const helperFn = e.Effect.fn(function*(someInput: number) {
+  const helperFn = Effect.fn(function*(someInput: number) {
+    //  ^?
     // By placing helperFn inside the layer, it can access serviceOne directly
     const serviceOneResult = yield* serviceOne.serviceOneMethod(someInput);
     // Do something complex with result before returning it.
@@ -172,7 +173,7 @@ const ServiceTwoImpl = e.Layer.effect(ServiceTwo, e.Effect.gen(function*() {
     return complexResult;
   });
   return {
-    serviceTwoMethod: e.Effect.fn(function*(someInput) {
+    serviceTwoMethod: Effect.fn(function*(someInput) {
       return yield* helperFn(someInput);
     })
   }
@@ -182,17 +183,18 @@ const ServiceTwoImpl = e.Layer.effect(ServiceTwo, e.Effect.gen(function*() {
 And here's option two
 
 ```ts twoslash
-import * as e from "effect";
+import { Effect, Context, Layer, pipe } from "effect";
 
-class ServiceOne extends e.Context.Tag("ServiceOne")<ServiceOne, {
-  serviceOneMethod(someInput: number): e.Effect.Effect<string, never, never>;
+class ServiceOne extends Context.Tag("ServiceOne")<ServiceOne, {
+  serviceOneMethod(someInput: number): Effect.Effect<string, never, never>;
 }>() {};
 
-class ServiceTwo extends e.Context.Tag("ServiceTwo")<ServiceTwo, {
-  serviceTwoMethod(someInput: number): e.Effect.Effect<string, never, never>; 
+class ServiceTwo extends Context.Tag("ServiceTwo")<ServiceTwo, {
+  serviceTwoMethod(someInput: number): Effect.Effect<string, never, never>; 
 }>() {};
 // ---cut---
-const helperFn = e.Effect.fn(function*(someInput: number) {
+const helperFn = Effect.fn(function*(someInput: number) {
+  //  ^?
   const serviceOne = yield* ServiceOne;
   const serviceOneResult = yield* serviceOne.serviceOneMethod(someInput);
   // Do something complex with result before returning it.
@@ -200,23 +202,23 @@ const helperFn = e.Effect.fn(function*(someInput: number) {
   return complexResult;
 });
 
-const ServiceTwoImpl = e.Layer.effect(ServiceTwo, e.Effect.gen(function*() {
+const ServiceTwoImpl = Layer.effect(ServiceTwo, Effect.gen(function*() {
   const serviceOne = yield* ServiceOne;
-  const context = e.pipe(
-    e.Context.empty(),
-    e.Context.add(ServiceOne, serviceOne)
+  const context = pipe(
+    Context.empty(),
+    Context.add(ServiceOne, serviceOne)
   );
   return {
-    serviceTwoMethod: e.Effect.fn(function*(someInput) {
+    serviceTwoMethod: Effect.fn(function*(someInput) {
       // Because helperFn lives outside the impl, we have to pass a context or
       // eject from DI entirely and pass all services as function params
-      return yield* helperFn(someInput).pipe(e.Effect.provide(context));
+      return yield* helperFn(someInput).pipe(Effect.provide(context));
     })
   }
 }));
 ```
 
-As we get into 5+ services territory the code for specifying dependencies and adding them all to a context starts to feel like a lot of unnecessary boilerplate.
+As we get into 5+ services territory the code for specifying dependencies and adding them all to a context starts to smell like unnecessary boilerplate.
 
 ```ts
 const serviceOne = yield* ServiceOne;
@@ -234,187 +236,593 @@ const context = e.pipe(
 )
 ```
 
-Are we really going to refer to this as state-of-the-art TypeScript in 2026?
+*This* is what we're calling state-of-the-art TypeScript in 2026?
 
 #### 5. Confusing Naming Conventions
 
-Lastly, I've always been bothered by the term "service" in Effect. To me, "service" alludes to something running outside the project which my code invokes via some network call, but in Effect a service is basically a singleton instance which encapsulates some common internal logic. "Tag" is also confusing compared to a well-known term like "interface". I know that Effect is simply conforming to conventions established by other DI frameworks like ZIO or Angular, but from my point of view defaults should be sensible and names shouldn't be surprising.
+Lastly, I've always been bothered by Effect's use of the term "service". To me, "service" alludes to some outside entity which my code can invoke via some network call, but in Effect a service is basically a singleton instance which encapsulates some common internal logic. "Tag" is also confusing compared to a well-known term like "interface". I'm aware that Effect is following conventions established by other DI frameworks like [ZIO](https://zio.dev/reference/di/) or [Angular](https://angular.dev/guide/di#what-are-services), but from my POV defaults should be sensible and names [shouldn't be surprising](https://en.wikipedia.org/wiki/Principle_of_least_astonishment).
 
 ## Effective Modules
 
-All these headaches had me searching for ways to make Effect feel more self-explanatory and intuitive. Enough experimentation eventually led to something packageable as its own library. Enter Effective Modules.
+All these headaches had me searching for ways to make Effect feel more self-explanatory and intuitive. Enough experimentation eventually led to something packageable as its own library. I'm calling it [Effective Modules](https://github.com/ozyman42/effective-modules). Perhaps some of these ideas / patterns might make their way into Effect at some point.
 
 #### Effective?
 
-I'm coining the word "Effective" here to mean idiomatic, elegant Effect code. "Effective" is to Effect as "Pythonic" is to Python.
+I'm coining the word "Effective" here to mean idiomatic, elegant Effect code. "Effective" is to Effect as "Pythonic" is to Python. Not to be confused with ["Effectful"](https://idiomaticsoft.com/post/2024-01-02-effect-systems/).
 
 #### Modules?
 
-Modules is my word of choice over "tag" or "service". Module typically refers to some group of encapsulated code which is internal to a project. Module also implies a grouping of related functionality, and when [Uncle Bob first described the Dependency Inversion Principle](https://ebooks.karbust.me/Technology/Agile.Software.Development.Principles.Patterns.and.Practices.Pearson.pdf#:~:text=Somebody%20has%20to%20create%20the%20instances%20of%20the%20concrete%20classes,%20and%20whatever%20module%20does%20that%20will%20depend%20on%20them) he used "class" and "module" interchangeably when referring to code building blocks that depend on each other. The wiki article on DIP [does this too](https://en.wikipedia.org/wiki/Dependency_inversion_principle#:~:text=modules%20should%20not%20import%20anything%20from). In Effective Modules you declare classes and call them module implementations, but they're really just factories for creating Effect services/layers. 
+Modules is my word of choice over "tag" or "service". Module typically refers to some group of encapsulated code which is internal to a project. Module also implies a grouping of related functionality, and when [Uncle Bob first described the Dependency Inversion Principle](https://ebooks.karbust.me/Technology/Agile.Software.Development.Principles.Patterns.and.Practices.Pearson.pdf#:~:text=Somebody%20has%20to%20create%20the%20instances%20of%20the%20concrete%20classes,%20and%20whatever%20module%20does%20that%20will%20depend%20on%20them) he used "class" and "module" interchangeably when referring to code building blocks that depend on each other. The wiki article on DIP [does this too](https://en.wikipedia.org/wiki/Dependency_inversion_principle#:~:text=modules%20should%20not%20import%20anything%20from).
 
 I confess to substituting one overloaded term for another with "modules"
 - folders or files can be called modules (e.g. [ES Modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) or [Rust modules](https://doc.rust-lang.org/rust-by-example/mod/split.html))
 - libraries can be modules (e.g. [Go Modules](https://go.dev/blog/using-go-modules))
 - modules can simply mean a group of code (e.g. [NestJS modules](https://docs.nestjs.com/modules))
 
-but the commonality here is that "module" in all those above examples refers to code that's internal, encapsulated, and logically grouped under a namespace. So that word seems like is a sensible fit for Effect services than "service" is.
+The commonality here is that "module" in all these cases refers to code that's internal, encapsulated, and logically grouped under a namespace. So that word seems like a more sensible fit than "service". I'd love to see a rebuttal.
 
 #### Module Declaration
 
 With Effective Modules, we return to the plain interface.
 
 :::compare
-```ts
-class MyService extends Context.Tag("MyService")<
-  MyService,
+```ts twoslash
+import { Context, Data, Effect } from "effect";
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+// ---cut---
+class Users extends Context.Tag("Users")<
+  Users,
   {
-    methodOne(input: number): Effect<string>;
+    createUser(
+      username: string,
+      signature: string
+    ): Effect.Effect<{token: string}, BadSignature>;
+    
+    authenticate(
+      username: string,
+      signature: string
+    ): Effect.Effect<{token: string}, BadSignature>;
   }
 >() {}
 ```
 
-```ts
-interface IMyService {
-  methodOne(input: number): GenEffect<string>;
+```ts twoslash
+import { Data, Effect } from "effect";
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+// ---cut---
+interface IUsers {
+  createUser(
+    username: string,
+    signature: string
+  ): Effect.fn.Return<{token: string}, BadSignature>;
+  
+  authenticate(
+    username: string,
+    signature: string
+  ): Effect.fn.Return<{token: string}, BadSignature>;
 }
 ```
 :::
 
-Tags are implicitly created when we define a module registry using a string enum for module ID uniqueness.
+Tags are implicitly created by mapping each module name to an interface.
 
-```ts
-import {interfaces} from "effective-modules";
+```ts twoslash
+import { Data, Effect, Option } from "effect";
 
-export enum Module {
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+class InvalidToken extends Data.TaggedError("InvalidToken")<{}> {}
+class NoSuchTask extends Data.TaggedError("NoSuchTask")<{}> {}
+
+interface IUsers {
+  createUser(username: string, signature: string): Effect.fn.Return<{token: string}, BadSignature>;
+  authenticate(username: string, signature: string): Effect.fn.Return<{token: string}, BadSignature>;
+}
+
+interface ITodos {
+  getTasks(token: string): Effect.fn.Return<{task: string; id: string;}[], InvalidToken>
+  createTask(token: string, task: string): Effect.fn.Return<{task: string; id: string;}, InvalidToken>
+  completeTask(token: string, id: string): Effect.fn.Return<void, NoSuchTask | InvalidToken>;
+}
+
+interface IDatabase {
+  get(key: string): Effect.fn.Return<Option.Option<string>>;
+  set(key: string, value: string): Effect.fn.Return<void>;
+}
+// ---cut---
+import { interfaces } from "effective-modules";
+
+export enum Modules {
+  Users = "Users",
+  Todos = "Todos",
+  Database = "Database"
+}
+
+export const modules = interfaces<Modules, {
+  Users: IUsers;
+  Todos: ITodos;
+  Database: IDatabase;
+}>(Modules);
+
+modules;
+//^?
+```
+
+The string enum members are used as the tags' identifier type, bypassing the need for the verbose class syntax [mentioned earlier](#2-awkward-interface-syntax). A nice property of string enums is that their members are nominal types, meaning typescript will treat two modules with the same name as distinct. 
+
+```ts twoslash
+// @errors: 2322 1005
+import { Effect } from "effect";
+import { interfaces } from "effective-modules";
+// ---cut---
+enum ModuleSetOne {
+  Users = "Users",
+  Database = "Database"
+}
+
+const moduleSetOne = interfaces<ModuleSetOne, {
+  Users: {};
+  Database: {};
+}>(ModuleSetOne);
+
+enum ModuleSetTwo {
+  Users = "Users",
+  Database = "Database"
+}
+
+const moduleSetTwo = interfaces<ModuleSetTwo, {
+  Users: {};
+  Database: {};
+}>(ModuleSetTwo);
+
+function* program(): Effect.fn.Return<void, never, ModuleSetTwo.Users> {
+  yield* moduleSetTwo.Users;
+  yield* moduleSetOne.Users;
+}
+```
+
+We'll dive into this [a bit more later](#precise-error-location), but notice how we've managed to get an error at a specific line rather than the [entire generator function being marked as incorrect](#3-error-noise). This due to explicitly typing the return of the generator function using `Effect.fn.Return` rather than using the prescribed `Effect.gen` or `Effect.fn`.
+
+#### Module Implementation
+
+In Effective Modules, you create a class which implements an interface.
+
+:::compare
+```ts twoslash
+import { Data, Effect, Option, Layer } from "effect";
+
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+class InvalidToken extends Data.TaggedError("InvalidToken")<{}> {}
+class NoSuchTask extends Data.TaggedError("NoSuchTask")<{}> {}
+
+interface IUsers {
+  login(username: string, signature: string): Effect.Effect<{token: string}, BadSignature>;
+  validateToken(token: string): Effect.fn.Return<Option.Option<{username: string}>>;
+}
+
+interface ITodos {
+  getTasks(token: string): Effect.Effect<{task: string; id: string;}[], InvalidToken>
+  createTask(token: string, task: string): Effect.Effect<{task: string; id: string;}, InvalidToken>
+  completeTask(token: string, id: string): Effect.Effect<void, NoSuchTask | InvalidToken>;
+}
+
+interface IDatabase {
+  getAll(table: string, username: string): Effect.Effect<{key: string, value: string}[]>;
+  get(table: string, username: string, key: string): Effect.fn.Return<Option.Option<string>>;
+  set(table: string, username: string, value: string, key?: string): Effect.fn.Return<{key: string}>;
+  delete(table: string, username: string, key: string): Effect.fn.Return<void>;
+}
+
+import { interfaces } from "effective-modules";
+
+export enum Modules {
+  Users = "Users",
+  Todos = "Todos",
+  Database = "Database"
+}
+
+export const modules = interfaces<Modules, {
+  Users: IUsers;
+  Todos: ITodos;
+  Database: IDatabase;
+}>(Modules);
+// ---cut---
+export const TodosLive = Layer.effect(
+  modules.Todos,
+  Effect.gen(function*() {
+    const users = yield* modules.Users;
+    const db = yield* modules.Database;
+    const TASKS_TABLE = "tasks";
+    const validateTokenOrError = Effect.fn(function*(token: string) {
+      const maybeUsername = yield* users.validateToken(token);
+      if (Option.isNone(maybeUsername)) {
+        return yield* new InvalidToken();
+      }
+      return maybeUsername.value.username;
+    });
+    return {
+      getTasks: Effect.fn(function*(token) {
+        const username = yield* validateTokenOrError(token);
+        const items = yield* db.getAll(TASKS_TABLE, username);
+        return items.map(({key, value}) => ({id: key, task: value}));
+      }),
+      createTask: Effect.fn(function*(token, task) {
+        const username = yield* validateTokenOrError(token);
+        const { key } = yield* db.set(TASKS_TABLE, username, task);
+        return {id: key, task};
+      }),
+      completeTask: Effect.fn(function* (token, id) {
+        const username = yield* validateTokenOrError(token);
+        const exists = Option.isSome(yield* db.get(TASKS_TABLE, username, id));
+        if (!exists) return yield* new NoSuchTask();
+        yield* db.delete(TASKS_TABLE, username, id);
+      })
+    };
+  })
+)
+
+TodosLive
+// ^?
+```
+
+```ts twoslash
+import { Data, Effect, Option, Layer } from "effect";
+
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+class InvalidToken extends Data.TaggedError("InvalidToken")<{}> {}
+class NoSuchTask extends Data.TaggedError("NoSuchTask")<{}> {}
+
+interface IUsers {
+  login(username: string, signature: string): Effect.fn.Return<{token: string}, BadSignature>;
+  validateToken(token: string): Effect.fn.Return<Option.Option<{username: string}>>;
+}
+
+interface ITodos {
+  getTasks(token: string): Effect.fn.Return<{task: string; id: string;}[], InvalidToken>
+  createTask(token: string, task: string): Effect.fn.Return<{task: string; id: string;}, InvalidToken>
+  completeTask(token: string, id: string): Effect.fn.Return<void, NoSuchTask | InvalidToken>;
+}
+
+interface IDatabase {
+  getAll(table: string, username: string): Effect.fn.Return<{key: string, value: string}[]>;
+  get(table: string, username: string, key: string): Effect.fn.Return<Option.Option<string>>;
+  set(table: string, username: string, value: string, key?: string): Effect.fn.Return<{key: string}>;
+  delete(table: string, username: string, key: string): Effect.fn.Return<void>;
+}
+
+import { interfaces } from "effective-modules";
+
+export enum Modules {
+  Users = "Users",
+  Todos = "Todos",
+  Database = "Database"
+}
+
+export const modules = interfaces<Modules, {
+  Users: IUsers;
+  Todos: ITodos;
+  Database: IDatabase;
+}>(Modules);
+// ---cut---
+import { Implementing } from "effective-modules";
+
+class TodosImpl extends Implementing(modules.Todos).Uses(modules.Database, modules.Users) implements ITodos {
+  private static readonly TASKS_TABLE = "tasks";
+
+  *getTasks(token: string): Effect.fn.Return<{ task: string; id: string; }[], InvalidToken> {
+    const username = yield* this.validateTokenOrError(token);
+    const items = yield* this.dependencies.Database.getAll(
+      TodosImpl.TASKS_TABLE, username
+    );
+    return items.map(({key, value}) => ({id: key, task: value}));
+  }
+
+  *createTask(token: string, task: string): Effect.fn.Return<{ task: string; id: string; }, InvalidToken> {
+    const username = yield* this.validateTokenOrError(token);
+    const { key } = yield* this.dependencies.Database.set(
+      TodosImpl.TASKS_TABLE, username, task
+    );
+    return {id: key, task};
+  }
+
+  *completeTask(token: string, id: string): Effect.fn.Return<void, NoSuchTask | InvalidToken> {
+    const username = yield* this.validateTokenOrError(token);
+    const exists = Option.isSome(yield* this.dependencies.Database.get(
+      TodosImpl.TASKS_TABLE, username, id
+    ));
+    if (!exists) return yield* new NoSuchTask();
+    yield* this.dependencies.Database.delete(
+      TodosImpl.TASKS_TABLE, username, id
+    );
+  }
+
+  private *validateTokenOrError(token: string): Effect.fn.Return<string, InvalidToken> {
+    const maybeUsername = yield* this.dependencies.Users.validateToken(token);
+    if (Option.isNone(maybeUsername)) {
+      return yield* new InvalidToken();
+    }
+    return maybeUsername.value.username;
+  }
+}
+
+export const TodosLive = TodosImpl.Layer;
+//           ^?
+```
+:::
+
+The superclass `Implementing(modules.Todos)` created the `dependencies` structure automatically, and IDE autocomplete tooling for classes implementing an interface will generate method stubs so you don't need to type out the method signatures manually. Generator methods are used directly rather than wrapping in `Effect.fn` because that allows us to cleanly access `this.dependencies` and `this.context`.
+
+#### Precise Error Location
+
+If you get nothing else from this article take this away: explicitly annotating your generator functions with a return type of `Effect.fn.Return<A, E, R>` will enable exact error locations. This is an alias type that Effect ships to represent essentially a Generator of an effect.
+
+Here's the same `ensureLoggedIn` example [from earlier](#3-error-noise) but now we have a clear error on the `resolveAccessToken` call.
+
+![](./effective-modules-issue-highlighted.png)
+
+Let's see this in action in our Todo example where we'll yield an unexpected error from the `validateTokenOrError` method.
+
+:::compare
+```ts twoslash
+// @errors: 2345 2322
+import { Data, Effect, Option, Layer } from "effect";
+
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+class InvalidToken extends Data.TaggedError("InvalidToken")<{}> {}
+class NoSuchTask extends Data.TaggedError("NoSuchTask")<{}> {}
+
+interface IUsers {
+  login(username: string, signature: string): Effect.Effect<{token: string}, BadSignature>;
+  validateToken(token: string): Effect.fn.Return<Option.Option<{username: string}>>;
+}
+
+interface ITodos {
+  getTasks(token: string): Effect.Effect<{task: string; id: string;}[], InvalidToken>
+  createTask(token: string, task: string): Effect.Effect<{task: string; id: string;}, InvalidToken>
+  completeTask(token: string, id: string): Effect.Effect<void, NoSuchTask | InvalidToken>;
+}
+
+interface IDatabase {
+  getAll(table: string, username: string): Effect.Effect<{key: string, value: string}[]>;
+  get(table: string, username: string, key: string): Effect.fn.Return<Option.Option<string>>;
+  set(table: string, username: string, value: string, key?: string): Effect.fn.Return<{key: string}>;
+  delete(table: string, username: string, key: string): Effect.fn.Return<void>;
+}
+
+import { interfaces } from "effective-modules";
+
+export enum Modules {
+  Users = "Users",
+  Todos = "Todos",
+  Database = "Database"
+}
+
+export const modules = interfaces<Modules, {
+  Users: IUsers;
+  Todos: ITodos;
+  Database: IDatabase;
+}>(Modules);
+// ---cut---
+export const TodosLive = Layer.effect(
+  modules.Todos,
+  Effect.gen(function*() {
+    const users = yield* modules.Users;
+    const db = yield* modules.Database;
+    const TASKS_TABLE = "tasks";
+    const validateTokenOrError = Effect.fn(function*(token: string) {
+      const maybeUsername = yield* users.validateToken(token);
+      if (Option.isNone(maybeUsername)) {
+        return yield* new InvalidToken();
+      }
+      if (token.length) {
+        return yield* new BadSignature();
+      }
+      return maybeUsername.value.username;
+    });
+    return {
+      getTasks: Effect.fn(function*(token) {
+        const username = yield* validateTokenOrError(token);
+        const items = yield* db.getAll(TASKS_TABLE, username);
+        return items.map(({key, value}) => ({id: key, task: value}));
+      }),
+      createTask: Effect.fn(function*(token, task) {
+        const username = yield* validateTokenOrError(token);
+        const { key } = yield* db.set(TASKS_TABLE, username, task);
+        return {id: key, task};
+      }),
+      completeTask: Effect.fn(function* (token, id) {
+        const username = yield* validateTokenOrError(token);
+        const exists = Option.isSome(yield* db.get(TASKS_TABLE, username, id));
+        if (!exists) return yield* new NoSuchTask();
+        yield* db.delete(TASKS_TABLE, username, id);
+      })
+    };
+  })
+)
+```
+
+```ts twoslash
+// @errors: 2345 2322
+import { Data, Effect, Option, Layer } from "effect";
+
+class BadSignature extends Data.TaggedError("BadSignature")<{}> {}
+class InvalidToken extends Data.TaggedError("InvalidToken")<{}> {}
+class NoSuchTask extends Data.TaggedError("NoSuchTask")<{}> {}
+
+interface IUsers {
+  login(username: string, signature: string): Effect.fn.Return<{token: string}, BadSignature>;
+  validateToken(token: string): Effect.fn.Return<Option.Option<{username: string}>>;
+}
+
+interface ITodos {
+  getTasks(token: string): Effect.fn.Return<{task: string; id: string;}[], InvalidToken>
+  createTask(token: string, task: string): Effect.fn.Return<{task: string; id: string;}, InvalidToken>
+  completeTask(token: string, id: string): Effect.fn.Return<void, NoSuchTask | InvalidToken>;
+}
+
+interface IDatabase {
+  getAll(table: string, username: string): Effect.fn.Return<{key: string, value: string}[]>;
+  get(table: string, username: string, key: string): Effect.fn.Return<Option.Option<string>>;
+  set(table: string, username: string, value: string, key?: string): Effect.fn.Return<{key: string}>;
+  delete(table: string, username: string, key: string): Effect.fn.Return<void>;
+}
+
+import { interfaces } from "effective-modules";
+
+export enum Modules {
+  Users = "Users",
+  Todos = "Todos",
+  Database = "Database"
+}
+
+export const modules = interfaces<Modules, {
+  Users: IUsers;
+  Todos: ITodos;
+  Database: IDatabase;
+}>(Modules);
+// ---cut---
+import { Implementing } from "effective-modules";
+
+class TodosImpl extends Implementing(modules.Todos).Uses(modules.Database, modules.Users) implements ITodos {
+  private static readonly TASKS_TABLE = "tasks";
+
+  *getTasks(token: string): Effect.fn.Return<{ task: string; id: string; }[], InvalidToken> {
+    const username = yield* this.validateTokenOrError(token);
+    const items = yield* this.dependencies.Database.getAll(
+      TodosImpl.TASKS_TABLE, username
+    );
+    return items.map(({key, value}) => ({id: key, task: value}));
+  }
+
+  *createTask(token: string, task: string): Effect.fn.Return<{ task: string; id: string; }, InvalidToken> {
+    const username = yield* this.validateTokenOrError(token);
+    const { key } = yield* this.dependencies.Database.set(
+      TodosImpl.TASKS_TABLE, username, task
+    );
+    return {id: key, task};
+  }
+
+  *completeTask(token: string, id: string): Effect.fn.Return<void, NoSuchTask | InvalidToken> {
+    const username = yield* this.validateTokenOrError(token);
+    const exists = Option.isSome(yield* this.dependencies.Database.get(
+      TodosImpl.TASKS_TABLE, username, id
+    ));
+    if (!exists) return yield* new NoSuchTask();
+    yield* this.dependencies.Database.delete(
+      TodosImpl.TASKS_TABLE, username, id
+    );
+  }
+
+  private *validateTokenOrError(token: string): Effect.fn.Return<string, InvalidToken> {
+    const maybeUsername = yield* this.dependencies.Users.validateToken(token);
+    if (Option.isNone(maybeUsername)) {
+      return yield* new InvalidToken();
+    }
+    if (token.length) {
+      return yield* new BadSignature();
+    }
+    return maybeUsername.value.username;
+  }
+}
+
+export const TodosLive = TodosImpl.Layer;
+```
+:::
+
+In Effect's current canon, the entire implementation gets marked as invalid, which isn't helpful when trying to pinpoint the issue.
+
+#### dependencies, context
+
+As mentioned before, the `Implementing` utility returns an abstract superclass that provides a `dependencies` structure. The superclass also provides a `context` structure to avoid the problem of [repeating yourself](#:~:text=state%2Dof%2Dthe%2Dart%20TypeScript) when creating a context to pass dependencies to effects outside of the implementation. Revisiting our early example we have
+
+:::compare
+```ts twoslash
+import { Effect, Context, Layer, pipe } from "effect";
+
+class ServiceOne extends Context.Tag("ServiceOne")<ServiceOne, {
+  serviceOneMethod(someInput: number): Effect.Effect<string, never, never>;
+}>() {};
+
+class ServiceTwo extends Context.Tag("ServiceTwo")<ServiceTwo, {
+  serviceTwoMethod(someInput: number): Effect.Effect<string, never, never>; 
+}>() {};
+// ---cut---
+const helperFn = Effect.fn(function*(someInput: number) {
+  const serviceOne = yield* ServiceOne;
+  const serviceOneResult = yield* serviceOne.serviceOneMethod(someInput);
+  // Do something complex with result before returning it.
+  const complexResult = serviceOneResult;
+  return complexResult;
+});
+
+const ServiceTwoImpl = Layer.effect(ServiceTwo, Effect.gen(function*() {
+  const serviceOne = yield* ServiceOne;
+  const context = pipe(
+    Context.empty(),
+    Context.add(ServiceOne, serviceOne)
+  );
+  return {
+    serviceTwoMethod: Effect.fn(function*(someInput) {
+      // Because helperFn lives outside the impl, we have to pass a context or
+      // eject from DI entirely and pass all services as function params
+      return yield* pipe(
+        helperFn(someInput),
+        Effect.provide(context)
+      );
+    })
+  }
+}));
+```
+```ts twoslash
+import { Effect, Context, Layer, pipe } from "effect";
+
+interface IServiceOne {
+  serviceOneMethod(someInput: number): Effect.fn.Return<string, never, never>;
+}
+
+interface IServiceTwo {
+  serviceTwoMethod(someInput: number): Effect.fn.Return<string, never, never>; 
+}
+
+enum Modules {
   ServiceOne = "ServiceOne",
   ServiceTwo = "ServiceTwo"
 }
 
-export const modules = interfaces<Module, {
-  [Module.ServiceOne]: IServiceOne;
-  [Module.ServiceTwo]: IServiceTwo;
-}>()
-```
+import { interfaces, Implementing } from "effective-modules";
 
-`modules` here is a value, not a type. We need a type for each module to represent it in an effect requirements channel. For that we utilize the key of the object type passed into `interfaces`, the members of the `Module` enum. A notable feature of `Effect<string, never, Module.ServiceOne>` is that `Effect<string, never, "ServiceOne">` is not assignable for it, nor is an effect requiring a service with the same name but from a different module set. For instance
+const modules = interfaces<Modules, {
+  ServiceOne: IServiceOne;
+  ServiceTwo: IServiceTwo;
+}>(Modules);
 
-```ts
-enum ModuleTwo {
-  ServiceOne = "ServiceOne";
-}
+// ---cut---
+const helperFn = Effect.fn(function*(someInput: number): Effect.fn.Return<string, never, Modules.ServiceOne> {
+  const serviceOne = yield* modules.ServiceOne;
+  const serviceOneResult = yield* serviceOne.serviceOneMethod(someInput);
+  // Do something complex with result before returning it.
+  const complexResult = serviceOneResult;
+  return complexResult;
+});
 
-const otherModules = interfaces<ModuleTwo, {
-  [ModuleTwo.ServiceOne]: IServiceOne;
-}>
-
-declare const effectOne: Effect<string, never, Module.ServiceOne>;
-// Type error
-const effectTwo: Effect<string, never, ModuleTwo.ServiceOne> = effectOne;
-
-```
-
-This module ID uniqueness, despite the underlying string being the same, is a result of string enum members being nominal types.
-
-#### Module Implementation
-
-With Effective Modules we return to classes which implement the interface.
-
-:::compare
-```ts
-const MyServiceImpl = Layer.effect(
-  IMyService,
-  Effect.gen(function*() {
-    const otherService = yield* OtherService;
-    return {
-      methodOne: Effect.fn(function*(input) {
-        const result = yield* otherService
-          .doSomething(input);
-        return result.toString();
-      })
-    }
-  })
-)
-
-export const live = pipe(
-  MyServiceImpl,
-  Layer.provideMerge(OtherServiceImpl)
-);
-```
-
-```ts
-import {Implementing} from "effective-modules";
-
-const { myService, otherService } = modules;
-
-class MyServiceImpl extends 
-  Implementing(myService).Uses(otherService) 
-  implements IMyService {
-  *methodOne(input: number): GenEffect<string> {
-    const result = yield* this.dependencies
-      .otherService
-      .doSomething(input);
-    return result.toString();
+class ServiceTwoImpl extends Implementing(modules.ServiceTwo).Uses(modules.ServiceOne) implements IServiceTwo {
+  *serviceTwoMethod(someInput: number): Effect.fn.Return<string, never, never> {
+    // Because helperFn lives outside the impl, we have to pass a context or
+    // eject from DI entirely and pass all services as function params
+    return yield* pipe(
+      helperFn(someInput),
+      Effect.provide(this.context)
+    );
   }
 }
-
-export const live = pipe(
-  MyServiceImpl.Layer,
-  Layer.provideMerge(OtherServiceImpl.Layer)
-);
 ```
 :::
 
-The superclass of `MyServiceImpl` created the `dependencies` structure automatically, and IDE autocomplete tooling for classes will generate method stubs for the class. But these semantics improvements on their own wouldn't have been enough to justify creating Effective Modules.
+Notice how in the Effective Modules sample, there's no need to manually create the context
 
-#### Precise Error Location
+#### Custom Initializer
 
-In Effective Modules the return type of generator functions is explicitly typed, meaning we get a targeted compilation error for any yield which requires services which the Effect is not supposed to depend on or which produces errors the Effect is not supposed to produce. Here's the same `ensureLoggedIn` example from earlier but now we have a clear error on the `resolveAccessToken` call.
+To allow for complex construction behavior, one can pass a 
 
-![](./effective-modules-issue-highlighted.png)
-
-This is thanks to the `GenEffect<>` type which was marked as the return type for the generator function.
-
-#### The GenEffect type
-
-
-#### dependencies, context
-
-```ts twoslash
-// @errors: 2322 2345
-import * as e from "effect";
-
-class NoSauceError extends e.Data.TaggedError("NoSauceError") {}
-class NotCookedError extends e.Data.TaggedError("NotCookedError") {}
-class LeftTableError extends e.Data.TaggedError("LeftTableError") {}
-
-declare const eatFood: e.Effect.Effect<{satisfied: boolean}, NoSauceError>;
-
-const goToRestaurant: () => e.Effect.Effect<{tip: number}, LeftTableError> = () => {
-  return e.Effect.gen(function*() {
-    // ... get served ...
-    const {satisfied} = yield* eatFood;
-    return false;
-  })
-}
-
-class IThing extends e.Context.Tag("IThing")<IThing, {
-  onePunch(): e.Effect.Effect<boolean, LeftTableError, never>;
-}>() {}
-
-const ThingImpl = e.Layer.effect(IThing, e.Effect.gen(function*() {
-  return {
-    onePunch() {
-      return e.Effect.gen(function*() {
-        return 5;
-      })
-    }
-  }
-}))
-
-```
-
-### Custom Initializer
+#### effunct 
 
 ## What would make this better?
-
-

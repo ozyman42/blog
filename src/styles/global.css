@@ -6,6 +6,7 @@
 
 :root {
 	--content-width: 800px;
+	--compare-font-size: 0.6em;
 	--accent: #2337ff;
 	--accent-dark: #000d8a;
 	--black: 15, 18, 25;
@@ -68,6 +69,23 @@ h6 {
 	color: rgb(var(--black));
 	line-height: 1.2;
 	font-family: Arial, sans-serif;
+}
+/* Heading anchor links */
+.heading-anchor {
+	color: inherit;
+	text-decoration: none;
+}
+.heading-anchor::before {
+	content: '#';
+	position: absolute;
+	transform: translateX(-1.2em);
+	opacity: 0;
+	font-weight: 400;
+	color: var(--accent);
+	transition: opacity 0.15s;
+}
+:is(h1, h2, h3, h4, h5, h6):hover .heading-anchor::before {
+	opacity: 1;
 }
 h1 {
 	font-size: 3.052em;
@@ -139,16 +157,34 @@ pre .line {
 pre .line:empty::after {
 	content: ' ';
 }
-/* Push lines down so persisted twoslash popups don't cover the next line */
+/* Initial padding for persisted popups; JS in BlogPost.astro overrides with the measured height */
 pre .line:has(.twoslash-query-persisted) {
 	padding-bottom: 3.5em;
+}
+/* Compare blocks anchor popups to .compare-before, not pre — no padding needed */
+.compare-before pre .line:has(.twoslash-query-persisted),
+.compare-after pre .line:has(.twoslash-query-persisted) {
+	padding-bottom: 0;
 }
 /* Prevent popup code from wrapping — let it stretch as wide as needed */
 .twoslash-popup-code {
 	white-space: nowrap;
 }
+/* Nested shiki <pre> inside popups must not inherit standalone code-block styles */
+.twoslash-popup-code pre {
+	padding: 0;
+	margin: 0;
+	font-size: 1em;
+	border-radius: 0;
+	line-height: inherit;
+	overflow-x: auto !important;
+	white-space: normal !important;
+	background: transparent !important;
+}
+.twoslash-popup-code pre .line {
+	white-space: pre;
+}
 .twoslash-popup-container {
-	min-width: 450px;
 	max-width: min(600px, 90vw);
 }
 .twoslash .twoslash-popup-code {
@@ -158,11 +194,34 @@ pre .line:has(.twoslash-query-persisted) {
 }
 .twoslash .twoslash-popup-docs {
 	font-size: 0.95rem !important;
+	line-height: 1.4;
+	white-space: normal;
 	max-height: 300px;
 	overflow-y: auto;
 }
 .twoslash .twoslash-popup-docs p {
-	margin: 0.4em 0;
+	margin: 0 0 0.5em;
+}
+.twoslash .twoslash-popup-docs p:has(> strong:only-child) {
+	margin-top: 1.4em;
+}
+.twoslash .twoslash-popup-docs h1,
+.twoslash .twoslash-popup-docs h2,
+.twoslash .twoslash-popup-docs h3,
+.twoslash .twoslash-popup-docs h4,
+.twoslash .twoslash-popup-docs h5,
+.twoslash .twoslash-popup-docs h6 {
+	margin: 0.5em 0 0.15em;
+	font-size: 1em;
+}
+.twoslash .twoslash-popup-docs pre {
+	padding: 0.4em 0.6em;
+	font-size: 0.85em;
+	margin: 0.3em 0;
+	overflow-x: auto !important;
+}
+.twoslash .twoslash-popup-docs pre .line {
+	white-space: pre;
 }
 .twoslash .twoslash-error-line {
 	width: auto !important;
@@ -207,14 +266,41 @@ hr {
 .compare-before,
 .compare-after {
 	min-width: 0;
+	position: relative;
+}
+.compare-before .twoslash-hover,
+.compare-after .twoslash-hover {
+	position: static;
+}
+.compare-before .twoslash-popup-code pre,
+.compare-after .twoslash-popup-code pre {
+	font-size: 1em;
+	padding: 0;
+	white-space: normal !important;
 }
 .compare-before pre,
 .compare-after pre {
-	font-size: 0.5em;
+	font-size: var(--compare-font-size);
 	padding: 0.75em;
+	overflow-x: auto !important;
+	white-space: pre !important;
+}
+.compare-before pre .line,
+.compare-after pre .line {
+	white-space: pre;
+}
+/* Moved popup containers: match code font context so all popup text scales with --compare-font-size */
+.compare-before > .twoslash-popup-container,
+.compare-after > .twoslash-popup-container {
+	font-size: var(--compare-font-size);
+}
+/* Popup docs: use em so the ratio vs code text (≈1.17) stays the same as outside compare blocks */
+.compare-before > .twoslash-popup-container .twoslash-popup-docs,
+.compare-after > .twoslash-popup-container .twoslash-popup-docs {
+	font-size: 1.17em !important;
 }
 .compare-label {
-	font-size: 0.75em;
+	font-size: var(--compare-font-size);
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;

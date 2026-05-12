@@ -65,10 +65,21 @@ const { title, subtitle, description, pubDate, updatedDate, heroImage } = Astro.
 	</head>
 
 	<script>
+		// Wrap heading text in anchor links so each heading is a copyable permalink
+		document.querySelectorAll<HTMLElement>('.prose h1[id], .prose h2[id], .prose h3[id], .prose h4[id], .prose h5[id], .prose h6[id]').forEach((heading) => {
+			const a = document.createElement('a');
+			a.href = '#' + heading.id;
+			a.className = 'heading-anchor';
+			while (heading.firstChild) a.appendChild(heading.firstChild);
+			heading.appendChild(a);
+		});
+
 		const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
 		const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
 		document.querySelectorAll('pre').forEach((pre) => {
+			if (pre.closest('.twoslash-popup-container')) return;
+			if (pre.closest('.compare-before, .compare-after')) return;
 			const btn = document.createElement('button');
 			btn.className = 'copy-btn';
 			btn.innerHTML = copyIcon;
@@ -84,6 +95,54 @@ const { title, subtitle, description, pubDate, updatedDate, heroImage } = Astro.
 			});
 			pre.style.position = 'relative';
 			pre.appendChild(btn);
+		});
+
+		// Physically move popup containers out of compare-block <pre> elements so
+		// they don't inflate the pre's scroll area. Browsers include all DOM
+		// descendants (even absolutely-positioned ones) in scroll area computation
+		// regardless of containing block.
+		document.querySelectorAll<HTMLElement>('.compare-before, .compare-after').forEach((container) => {
+			const pre = container.querySelector<HTMLElement>('pre');
+			if (!pre) return;
+			// twoslash CSS rules key on .twoslash ancestor; add it to container
+			// so styling still applies once popups are reparented here.
+			container.classList.add('twoslash');
+			pre.querySelectorAll<HTMLElement>('.twoslash-hover, .twoslash-error-hover').forEach((hover) => {
+				const popup = hover.querySelector<HTMLElement>(':scope > .twoslash-popup-container');
+				if (!popup) return;
+				container.appendChild(popup);
+				// position: fixed is viewport-relative and excluded from ALL
+				// ancestors' scroll-area calculations — the only way to prevent
+				// page-level horizontal scroll inflation.
+				popup.style.position = 'fixed';
+				popup.style.transform = 'none';
+				popup.style.opacity = '0';
+				popup.style.pointerEvents = 'none';
+				hover.addEventListener('mouseenter', () => {
+					const hr = hover.getBoundingClientRect();
+					popup.style.top = hr.bottom + 'px';
+					popup.style.left = hr.left + 'px';
+					popup.style.opacity = '1';
+					popup.style.pointerEvents = 'auto';
+				});
+				const hide = (e: MouseEvent) => {
+					if (!popup.contains(e.relatedTarget as Node) && !hover.contains(e.relatedTarget as Node)) {
+						popup.style.opacity = '0';
+						popup.style.pointerEvents = 'none';
+					}
+				};
+				hover.addEventListener('mouseleave', hide);
+				popup.addEventListener('mouseleave', hide);
+			});
+		});
+
+		document.querySelectorAll<HTMLElement>('.twoslash-query-persisted').forEach((span) => {
+			if (span.closest('.compare-before, .compare-after')) return;
+			const popup = span.querySelector('.twoslash-popup-container');
+			const line = span.closest<HTMLElement>('.line');
+			if (!popup || !line) return;
+			const overflow = popup.getBoundingClientRect().bottom - line.getBoundingClientRect().bottom;
+			if (overflow > 0) line.style.paddingBottom = (overflow + 16) + 'px';
 		});
 	</script>
 	<style>
