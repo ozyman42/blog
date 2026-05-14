@@ -292,7 +292,7 @@ Lastly, I've always been bothered by Effect's use of the term "service". To me, 
 
 All these headaches had me searching for ways to make Effect feel more self-explanatory and intuitive. Effect seems to be creating the right set of foundational primitives for building production-grade TypeScript, so it seems worthwhile to invest in making these primitives feel good to work with.
 
-Enough experimentation eventually led to something packageable as its own library. I'm calling it [Effective Modules](https://github.com/ozyman42/effective-modules). Perhaps some of these ideas / patterns might make their way into Effect core and or the canonical docs/examples at some point? Let me know what you think.
+Enough experimentation eventually led to something packageable as its own library. I'm calling it [Effective Modules](https://github.com/ozyman42/effective-modules). Perhaps some of these ideas / patterns might make their way into Effect core and / or the canonical docs / examples at some point? Let me know what you think.
 
 #### Effective?
 
