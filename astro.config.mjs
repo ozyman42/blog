@@ -54,6 +54,22 @@ function renderDocMarkdown(md) {
 	return hast.children.map(highlightDocPre);
 }
 
+/** @type {import('shiki').ShikiTransformer} */
+const storeSourceTransformer = {
+	name: 'store-full-source',
+	preprocess(code) {
+		this._origSource = code;
+	},
+	pre(node) {
+		const src = (this._origSource ?? this.source ?? '')
+			.split('\n')
+			.filter(l => !/^\s*\/\/ \^\?/.test(l))
+			.join('\n')
+			.trim();
+		node.properties['data-full-source'] = src;
+	},
+};
+
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://ozyman42.github.io',
@@ -64,6 +80,7 @@ export default defineConfig({
 			theme: 'github-dark',
 			wrap: true,
 			transformers: [
+				storeSourceTransformer,
 				transformerTwoslash({
 					explicitTrigger: true,
 					renderer: rendererRich({
